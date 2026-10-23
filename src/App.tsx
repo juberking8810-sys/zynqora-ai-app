@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ActiveTab, AppLanguage, ShortsScript, ToolCategoryId } from './types';
+import { ActiveTab, AppLanguage, ShortsScript, ToolCategoryId, UserProfile } from './types';
+import { LoginScreen } from './components/LoginScreen';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { HomeScreen } from './components/HomeScreen';
+import { ToolboxScreen } from './components/ToolboxScreen';
+import { ExploreScreen } from './components/ExploreScreen';
+import { AssetsScreen } from './components/AssetsScreen';
+import { MySpaceScreen } from './components/MySpaceScreen';
 import { ShortsGeneratorScreen } from './components/ShortsGeneratorScreen';
 import { ChatScreen } from './components/ChatScreen';
 import { SavedScriptsScreen } from './components/SavedScriptsScreen';
-import { TeleprompterModal } from './components/TeleprompterModal';
 import { ToolDetailView } from './components/ToolDetailView';
+import { TeleprompterModal } from './components/TeleprompterModal';
+import { CreationSheetModal } from './components/CreationSheetModal';
 import { Toast } from './components/Toast';
 import { safeStorage } from './utils/storage';
 
@@ -26,10 +32,44 @@ export default function App() {
     });
   };
 
-  // 2. Active Tab state: 'home' | 'chat' | 'shorts' | 'saved'
+  // 2. Authentication state (SCREEN 1 - LOGIN SCREEN vs SCREEN 2 - HOME SCREEN)
+  const [user, setUser] = useState<UserProfile | null>(() => {
+    const saved = safeStorage.getItem('zynqora_auth');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return safeStorage.getItem('zynqora_auth') !== null;
+  });
+
+  const handleLoginSuccess = (userProfile: UserProfile) => {
+    setUser(userProfile);
+    setIsAuthenticated(true);
+    safeStorage.setItem('zynqora_auth', JSON.stringify(userProfile));
+    setCurrentTab('home');
+  };
+
+  const handleSignOut = () => {
+    safeStorage.removeItem('zynqora_auth');
+    setUser(null);
+    setIsAuthenticated(false);
+    showToast(lang === 'hi' ? 'सफलतापूर्वक लॉग आउट हुआ।' : 'Signed out successfully.');
+  };
+
+  // 3. Active Tab state: 'home' | 'explore' | 'create' | 'assets' | 'myspace' | 'toolbox' | 'shorts' | 'chat' | 'tool_detail'
   const [currentTab, setCurrentTab] = useState<ActiveTab>('home');
 
-  // 3. Saved Scripts state (persisted in safeStorage)
+  // 4. Creation Sheet Modal
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // 5. Saved Scripts state (persisted in safeStorage)
   const [savedScripts, setSavedScripts] = useState<ShortsScript[]>(() => {
     const local = safeStorage.getItem('zynqora_saved_scripts');
     if (local) {
@@ -67,26 +107,11 @@ export default function App() {
 
   const isScriptSaved = (id: string) => savedScripts.some((s) => s.id === id);
 
-  // 4. Quick routing data from Home
+  // 6. Quick routing data from Home
   const [generatorTopic, setGeneratorTopic] = useState<string>('');
   const [chatPrompt, setChatPrompt] = useState<string>('');
 
-  const handleQuickStartTopic = (topic: string) => {
-    setGeneratorTopic(topic);
-    setCurrentTab('shorts');
-  };
-
-  const handleQuickChatPrompt = (prompt: string) => {
-    setChatPrompt(prompt);
-    setCurrentTab('chat');
-  };
-
-  const handleSelectScriptForView = (script: ShortsScript) => {
-    setGeneratorTopic(script.topic);
-    setCurrentTab('shorts');
-  };
-
-  // 5. Tool Studio Selection state
+  // 7. Tool Studio Selection state
   const [selectedToolId, setSelectedToolId] = useState<ToolCategoryId | null>(null);
 
   const handleSelectTool = (toolId: ToolCategoryId) => {
@@ -101,7 +126,7 @@ export default function App() {
       return;
     }
     if (toolId === 'saved_projects') {
-      setCurrentTab('saved');
+      setCurrentTab('assets');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -111,10 +136,10 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // 6. Teleprompter Modal state
+  // 8. Teleprompter Modal state
   const [teleprompterScript, setTeleprompterScript] = useState<ShortsScript | null>(null);
 
-  // 7. Toast Notification state
+  // 9. Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -130,10 +155,39 @@ export default function App() {
     }
   }, [toastMessage]);
 
+  // If NOT authenticated, render SCREEN 1 - LOGIN SCREEN
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0f0a1f] text-slate-100 font-sans selection:bg-purple-600 selection:text-white">
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          lang={lang}
+          onToggleLang={toggleLanguage}
+          onShowToast={showToast}
+        />
+      </div>
+    );
+  }
+
+  // If authenticated, render SCREEN 2 - HOME SCREEN & FULL STUDIO
   return (
-    <div className="min-h-screen bg-[#090514] text-slate-100 flex flex-col font-sans selection:bg-purple-600 selection:text-white">
+    <div className="min-h-screen bg-[#0a0a0f] text-slate-100 flex flex-col font-sans selection:bg-[#7c3aed] selection:text-white">
       {/* Toast Notification */}
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+
+      {/* Creation Sheet Modal */}
+      <CreationSheetModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        lang={lang}
+        onSelectTool={handleSelectTool}
+        onSelectTab={(tab) => {
+          setSelectedToolId(null);
+          setCurrentTab(tab);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+      />
 
       {/* Teleprompter Modal */}
       {teleprompterScript && (
@@ -145,9 +199,9 @@ export default function App() {
         />
       )}
 
-      {/* Main Top Navbar */}
+      {/* Top Navbar */}
       <Navbar
-        currentTab={currentTab === 'tool_detail' ? 'home' : currentTab}
+        currentTab={currentTab}
         onSelectTab={(tab) => {
           setSelectedToolId(null);
           setCurrentTab(tab);
@@ -156,31 +210,86 @@ export default function App() {
         lang={lang}
         onToggleLang={toggleLanguage}
         savedCount={savedScripts.length}
+        user={user}
+        onOpenCreate={() => setIsCreateModalOpen(true)}
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 w-full">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-6 w-full">
+        {/* SCREEN 2: HOME SCREEN */}
         {currentTab === 'home' && (
           <HomeScreen
             onSelectTab={(tab) => {
+              setSelectedToolId(null);
               setCurrentTab(tab);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             lang={lang}
-            savedScripts={savedScripts}
-            onSelectScriptForView={handleSelectScriptForView}
-            onQuickStartTopic={handleQuickStartTopic}
-            onQuickChatPrompt={handleQuickChatPrompt}
+            onSelectTool={handleSelectTool}
+            onOpenCreateModal={() => setIsCreateModalOpen(true)}
+            onShowToast={showToast}
+          />
+        )}
+
+        {/* TOOLBOX SCREEN: All 17 Tools */}
+        {currentTab === 'toolbox' && (
+          <ToolboxScreen
+            lang={lang}
+            onBack={() => {
+              setCurrentTab('home');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             onSelectTool={handleSelectTool}
           />
         )}
 
+        {/* EXPLORE SCREEN */}
+        {currentTab === 'explore' && (
+          <ExploreScreen
+            lang={lang}
+            onSelectTool={handleSelectTool}
+            onShowToast={showToast}
+          />
+        )}
+
+        {/* ASSETS SCREEN */}
+        {currentTab === 'assets' && (
+          <AssetsScreen
+            savedScripts={savedScripts}
+            onDeleteScript={handleDeleteScript}
+            onOpenTeleprompter={(script) => setTeleprompterScript(script)}
+            onLoadIntoGenerator={(script) => {
+              setGeneratorTopic(script.topic);
+              setCurrentTab('shorts');
+            }}
+            lang={lang}
+            onNavigateToGenerator={() => setCurrentTab('shorts')}
+            onShowToast={showToast}
+          />
+        )}
+
+        {/* MY SPACE SCREEN */}
+        {currentTab === 'myspace' && (
+          <MySpaceScreen
+            user={user}
+            lang={lang}
+            onToggleLang={toggleLanguage}
+            onSignOut={handleSignOut}
+            onSelectTab={(tab) => {
+              setSelectedToolId(null);
+              setCurrentTab(tab);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        )}
+
+        {/* INDIVIDUAL TOOL VIEW */}
         {currentTab === 'tool_detail' && selectedToolId && (
           <ToolDetailView
             toolId={selectedToolId}
             lang={lang}
             onBack={() => {
-              setCurrentTab('home');
+              setCurrentTab('toolbox');
               setSelectedToolId(null);
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
@@ -193,6 +302,7 @@ export default function App() {
           />
         )}
 
+        {/* SHORTS STUDIO */}
         {currentTab === 'shorts' && (
           <ShortsGeneratorScreen
             lang={lang}
@@ -204,6 +314,7 @@ export default function App() {
           />
         )}
 
+        {/* AI CHAT */}
         {currentTab === 'chat' && (
           <ChatScreen
             lang={lang}
@@ -213,6 +324,7 @@ export default function App() {
           />
         )}
 
+        {/* SAVED SCRIPTS */}
         {currentTab === 'saved' && (
           <SavedScriptsScreen
             scripts={savedScripts}
@@ -229,9 +341,9 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* Mobile Bottom Navigation Bar with lifted + button */}
       <BottomNav
-        currentTab={currentTab === 'tool_detail' ? 'home' : currentTab}
+        currentTab={currentTab}
         onSelectTab={(tab) => {
           setSelectedToolId(null);
           setCurrentTab(tab);
@@ -239,6 +351,7 @@ export default function App() {
         }}
         lang={lang}
         savedCount={savedScripts.length}
+        onOpenCreate={() => setIsCreateModalOpen(true)}
       />
     </div>
   );

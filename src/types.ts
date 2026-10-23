@@ -90,4 +90,24 @@ export interface ToolCategory {
   engineNoticeHi: string;
 }
 
-export type ActiveTab = 'home' | 'chat' | 'shorts' | 'saved' | 'tool_detail';
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  credits: number;
+  provider: 'google' | 'email' | 'guest';
+}
+
+export type ActiveTab =
+  | 'home'
+  | 'explore'
+  | 'create'
+  | 'assets'
+  | 'myspace'
+  | 'toolbox'
+  | 'chat'
+  | 'shorts'
+  | 'saved'
+  | 'tool_detail';
+
